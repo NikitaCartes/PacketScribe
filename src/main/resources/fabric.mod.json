@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "packetscribe",
+	"version": "${version}",
+	"name": "PacketScribe",
+	"description": "Packet dump and filtering mod for inbound and outbound Minecraft traffic.",
+	"authors": [
+		"NikitaCartes"
+	],
+	"contact": {
+		"homepage": "https://github.com/NikitaCartes",
+		"sources": "https://github.com/NikitaCartes/PacketLogger"
+	},
+	"license": "CC0-1.0",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dev.nikitacartes.packetscribe.PacketScribeMod"
+		]
+	},
+	"mixins": [
+		"packetscribe.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.18.2",
+		"minecraft": ">=1.21.0",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

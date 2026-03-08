@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "dev.nikitacartes.packetscribe.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"MinecraftServerMixin",
+		"network.ConnectionMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}
