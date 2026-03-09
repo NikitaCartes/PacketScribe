@@ -1,4 +1,4 @@
-package dev.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.packetdump;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -288,15 +288,9 @@ public final class PacketDumpService {
 		String packetFlow = null;
 		try {
 			PacketType<?> type = packet.type();
-			if (type != null) {
-				if (type.id() != null) {
-					packetType = type.id().toString();
-				}
-				if (type.flow() != null) {
-					packetFlow = type.flow().id();
-				}
-			}
-		} catch (Throwable ignored) {
+            packetType = type.id().toString();
+            packetFlow = type.flow().id();
+        } catch (Throwable ignored) {
 		}
 
 		PacketListener listener = connection.getPacketListener();
@@ -310,10 +304,11 @@ public final class PacketDumpService {
 		}
 
 		PacketPlayerRef playerRef = this.resolvePlayer(listener);
-		String remoteAddress = connection.getRemoteAddress() == null ? null : connection.getRemoteAddress().toString();
+		String remoteAddress = connection.getRemoteAddress().toString();
 		String connectionId = Integer.toHexString(System.identityHashCode(connection));
 		JsonElement packetContent = this.resolvePacketContent(packet, cfg);
-		List<String> stackTrace = cfg.stackTraces ? this.captureStackTrace(cfg.stackTraceDepth) : null;
+		PacketCreationTracker.PacketCreationInfo creationInfo = PacketCreationTracker.get(packet);
+		List<String> stackTrace = creationInfo != null ? creationInfo.stackTrace() : null;
 
 		return new PacketDumpEvent(
 			nowMs,
@@ -357,39 +352,36 @@ public final class PacketDumpService {
 	}
 
 	private JsonElement toJsonElement(Object value, int depth, IdentityHashMap<Object, Boolean> visited, int maxStringLength) {
-		if (value == null) {
-			return JsonNull.INSTANCE;
-		}
+        switch (value) {
+            case null -> {
+                return JsonNull.INSTANCE;
+            }
+            case JsonElement jsonElement -> {
+                return jsonElement.deepCopy();
+            }
+            case Number number -> {
+                return new JsonPrimitive(number);
+            }
+            case Boolean bool -> {
+                return new JsonPrimitive(bool);
+            }
+            case Character character -> {
+                return new JsonPrimitive(character);
+            }
+            case CharSequence text -> {
+                return new JsonPrimitive(this.truncateString(text.toString(), maxStringLength));
+            }
+            case Enum<?> enumValue -> {
+                return new JsonPrimitive(enumValue.name());
+            }
+            case Class<?> clazz -> {
+                return new JsonPrimitive(clazz.getName());
+            }
+            default -> {
+            }
+        }
 
-		if (value instanceof JsonElement jsonElement) {
-			return jsonElement.deepCopy();
-		}
-
-		if (value instanceof Number number) {
-			return new JsonPrimitive(number);
-		}
-
-		if (value instanceof Boolean bool) {
-			return new JsonPrimitive(bool);
-		}
-
-		if (value instanceof Character character) {
-			return new JsonPrimitive(character);
-		}
-
-		if (value instanceof CharSequence text) {
-			return new JsonPrimitive(this.truncateString(text.toString(), maxStringLength));
-		}
-
-		if (value instanceof Enum<?> enumValue) {
-			return new JsonPrimitive(enumValue.name());
-		}
-
-		if (value instanceof Class<?> clazz) {
-			return new JsonPrimitive(clazz.getName());
-		}
-
-		Class<?> valueClass = value.getClass();
+        Class<?> valueClass = value.getClass();
 		if (depth >= PACKET_JSON_MAX_DEPTH) {
 			JsonObject depthLimited = new JsonObject();
 			depthLimited.addProperty("_type", valueClass.getName());
@@ -555,19 +547,21 @@ public final class PacketDumpService {
 	}
 
 	private PacketPlayerRef resolvePlayer(PacketListener listener) {
-		if (listener == null) {
-			return null;
-		}
+        switch (listener) {
+            case null -> {
+                return null;
+            }
+            case ServerGamePacketListenerImpl serverGameListener -> {
+                return toPlayerRef(serverGameListener.player.getGameProfile());
+            }
+            case ServerCommonPacketListenerImpl serverCommonListener -> {
+                return toPlayerRef(serverCommonListener.getOwner());
+            }
+            default -> {
+            }
+        }
 
-		if (listener instanceof ServerGamePacketListenerImpl serverGameListener && serverGameListener.player != null) {
-			return toPlayerRef(serverGameListener.player.getGameProfile());
-		}
-
-		if (listener instanceof ServerCommonPacketListenerImpl serverCommonListener) {
-			return toPlayerRef(serverCommonListener.getOwner());
-		}
-
-		try {
+        try {
 			Method getter = listener.getClass().getMethod("getLocalGameProfile");
 			Object profileObject = getter.invoke(listener);
 			if (profileObject instanceof GameProfile gameProfile) {
@@ -593,22 +587,6 @@ public final class PacketDumpService {
 		return new PacketPlayerRef(uuid, name);
 	}
 
-	private List<String> captureStackTrace(int maxDepth) {
-		StackTraceElement[] fullTrace = Thread.currentThread().getStackTrace();
-		List<String> result = new ArrayList<>(Math.min(maxDepth, fullTrace.length));
-
-		for (int i = 3; i < fullTrace.length && result.size() < maxDepth; i++) {
-			StackTraceElement element = fullTrace[i];
-			String className = element.getClassName();
-			if (className.startsWith(PacketDumpService.class.getName())) {
-				continue;
-			}
-			result.add(element.toString());
-		}
-
-		return result;
-	}
-
 	private boolean matchesFilters(PacketDumpEvent event, PacketDumpConfig cfg) {
 		String direction = event.direction().toLowerCase(Locale.ROOT);
 		if (!cfg.directions.contains(direction)) {
@@ -619,12 +597,8 @@ public final class PacketDumpService {
 			return false;
 		}
 
-		if (!cfg.playerFilters.isEmpty() && !matchesPlayerFilter(cfg.playerFilters, event.player())) {
-			return false;
-		}
-
-		return true;
-	}
+        return cfg.playerFilters.isEmpty() || matchesPlayerFilter(cfg.playerFilters, event.player());
+    }
 
 	private static boolean matchesPacketFilter(List<String> filters, String packetClass, String packetType) {
 		String className = packetClass == null ? "" : packetClass.toLowerCase(Locale.ROOT);

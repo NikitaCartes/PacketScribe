@@ -1,4 +1,4 @@
-package dev.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.packetdump;
 
 import java.util.Locale;
 

@@ -1,11 +1,11 @@
-package dev.nikitacartes.packetscribe;
+package xyz.nikitacartes.packetscribe;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
-import dev.nikitacartes.packetscribe.packetdump.PacketDumpCommand;
-import dev.nikitacartes.packetscribe.packetdump.PacketDumpService;
+import xyz.nikitacartes.packetscribe.packetdump.PacketDumpCommand;
+import xyz.nikitacartes.packetscribe.packetdump.PacketDumpService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

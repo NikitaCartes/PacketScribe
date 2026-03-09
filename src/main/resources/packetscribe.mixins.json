@@ -3,7 +3,7 @@
 	"package": "dev.nikitacartes.packetscribe.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"network.ConnectionMixin"
+      "xyz.nikitacartes.packetscribe.mixin.network.ConnectionMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

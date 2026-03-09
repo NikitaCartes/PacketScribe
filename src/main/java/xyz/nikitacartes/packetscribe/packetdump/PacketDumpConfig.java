@@ -1,4 +1,4 @@
-package dev.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.packetdump;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -14,7 +14,6 @@ public final class PacketDumpConfig {
 	public boolean includeLocalConnections = false;
 	public int retentionMinutes = 10;
 	public boolean stackTraces = false;
-	public int stackTraceDepth = 20;
 	public boolean includePacketContent = false;
 	public int packetContentMaxLength = 1024;
 	public String outputFile = "logs/packetdump.jsonl";
@@ -32,7 +31,6 @@ public final class PacketDumpConfig {
 		copy.includeLocalConnections = this.includeLocalConnections;
 		copy.retentionMinutes = this.retentionMinutes;
 		copy.stackTraces = this.stackTraces;
-		copy.stackTraceDepth = this.stackTraceDepth;
 		copy.includePacketContent = this.includePacketContent;
 		copy.packetContentMaxLength = this.packetContentMaxLength;
 		copy.outputFile = this.outputFile;
@@ -55,12 +53,6 @@ public final class PacketDumpConfig {
 
 		if (this.retentionMinutes < 1) {
 			this.retentionMinutes = 1;
-		}
-
-		if (this.stackTraceDepth < 1) {
-			this.stackTraceDepth = 1;
-		} else if (this.stackTraceDepth > 128) {
-			this.stackTraceDepth = 128;
 		}
 
 		if (this.packetContentMaxLength < 64) {
