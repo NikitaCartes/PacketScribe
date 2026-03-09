@@ -8,7 +8,10 @@ Author: `NikitaCartes`
 
 - Dump all packets via config (`dumpAllByConfig`)
 - Dump via command (`/packetdump on|off|toggle`)
-- Fully disable tracking (`fullDisable`) so packets do not accumulate in memory
+- Two dump modes:
+	- `memory` — keep packets in memory and dump by command only
+	- `auto` — automatically dump all tracked packets to file
+- Optional exception-triggered recent dump (`dumpRecentOnException`)
 - Filter by specific packets
 - Filter by specific player (name or UUID)
 - Filter by direction (`inbound`/`outbound`)
@@ -25,7 +28,8 @@ The file is created automatically on first launch:
 Main fields:
 
 - `dumpAllByConfig`
-- `fullDisable`
+- `autoDumpToFile`
+- `dumpRecentOnException`
 - `directions`
 - `packetFilters`
 - `playerFilters`
@@ -43,9 +47,11 @@ Base command: `/packetdump`
 Subcommands:
 
 - `on|off|toggle|status`
-- `fulldisable on|off`
+- `mode <memory|auto>`
+- `exceptiondump <on|off>`
 - `reload`
-- `recent` — write a snapshot of the last `n` minutes to `packetdump-recent.json`
+- `recent` — write a snapshot of the last `n` minutes to `packetdump-recent-<timestamp>.json`
+	- The snapshot file includes metadata fields like `dumpEpochMs` and `dumpTimestampIso`
 - `direction <inbound|outbound|both>`
 - `packet add/remove/clear <filter>`
 - `player add/remove/clear <name-or-uuid>`

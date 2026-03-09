@@ -55,11 +55,13 @@ public final class PacketDumpService {
     private static final int PACKET_JSON_MAX_COLLECTION_ITEMS = 128;
     private static final int PACKET_JSON_MAX_FIELD_COUNT = 256;
     private static final int PACKET_JSON_MAX_STRING_LENGTH = 16 * 1024;
+    private static final long EXCEPTION_SNAPSHOT_COOLDOWN_MS = 5000L;
     private static final PacketDumpService INSTANCE = new PacketDumpService();
 
     private final PacketDumpConfigManager configManager;
     private final Object configLock = new Object();
     private final Object recentLock = new Object();
+    private final Object exceptionDumpLock = new Object();
     private final Deque<PacketDumpEvent> recentEvents = new ArrayDeque<>();
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -68,6 +70,7 @@ public final class PacketDumpService {
 
     private volatile PacketDumpConfig config;
     private volatile boolean commandDumpEnabled = false;
+    private volatile long lastExceptionDumpEpochMs = 0L;
     private final BlockingDeque<PacketDumpEvent> writerQueue;
     private volatile Thread writerThread;
 
@@ -132,11 +135,7 @@ public final class PacketDumpService {
 
     public boolean isEffectivelyEnabled() {
         PacketDumpConfig cfg = this.config;
-        return !cfg.fullDisable && (cfg.dumpAllByConfig || this.commandDumpEnabled);
-    }
-
-    public boolean isFullyDisabled() {
-        return this.config.fullDisable;
+        return cfg.dumpAllByConfig || this.commandDumpEnabled;
     }
 
     public boolean isCommandDumpEnabled() {
@@ -144,19 +143,10 @@ public final class PacketDumpService {
     }
 
     public void setCommandDumpEnabled(boolean enabled) {
-        if (enabled && this.config.fullDisable) {
-            this.commandDumpEnabled = false;
-            return;
-        }
         this.commandDumpEnabled = enabled;
     }
 
     public boolean toggleCommandDumpEnabled() {
-        if (this.config.fullDisable) {
-            this.commandDumpEnabled = false;
-            return false;
-        }
-
         this.commandDumpEnabled = !this.commandDumpEnabled;
         return this.commandDumpEnabled;
     }
@@ -229,8 +219,12 @@ public final class PacketDumpService {
         this.updateConfig(cfg -> cfg.retentionMinutes = retentionMinutes);
     }
 
-    public void setFullDisable(boolean enabled) {
-        this.updateConfig(cfg -> cfg.fullDisable = enabled);
+    public void setAutoDumpToFile(boolean enabled) {
+        this.updateConfig(cfg -> cfg.autoDumpToFile = enabled);
+    }
+
+    public void setDumpRecentOnException(boolean enabled) {
+        this.updateConfig(cfg -> cfg.dumpRecentOnException = enabled);
     }
 
     public void setStackTracesEnabled(boolean enabled) {
@@ -250,8 +244,36 @@ public final class PacketDumpService {
     }
 
     public Path writeRecentSnapshot() throws IOException {
+        return this.writeRecentSnapshotInternal("manual", null);
+    }
+
+    public void dumpRecentOnException(Throwable throwable) {
+        PacketDumpConfig cfg = this.config;
+        if (!cfg.dumpRecentOnException || !this.isEffectivelyEnabled()) {
+            return;
+        }
+
+        long nowMs = System.currentTimeMillis();
+        synchronized (this.exceptionDumpLock) {
+            if (nowMs - this.lastExceptionDumpEpochMs < EXCEPTION_SNAPSHOT_COOLDOWN_MS) {
+                return;
+            }
+            this.lastExceptionDumpEpochMs = nowMs;
+        }
+
+        try {
+            Path snapshotPath = this.writeRecentSnapshotInternal("exception", throwable);
+            LOGGER.error("Packet pipeline exception detected. Recent snapshot written to {}", snapshotPath, throwable);
+        } catch (Exception e) {
+            LOGGER.error("Failed to write recent snapshot after packet exception", e);
+        }
+    }
+
+    private Path writeRecentSnapshotInternal(String trigger, Throwable throwable) throws IOException {
         List<PacketDumpEvent> snapshot;
         PacketDumpConfig cfg = this.config;
+        long generatedAtEpochMs = System.currentTimeMillis();
+        String generatedAtIso = Instant.ofEpochMilli(generatedAtEpochMs).toString();
         synchronized (this.recentLock) {
             this.pruneRecentLocked(System.currentTimeMillis(), cfg.retentionMinutes);
             snapshot = List.copyOf(this.recentEvents);
@@ -259,14 +281,27 @@ public final class PacketDumpService {
 
         Path outputPath = resolveOutputPath(cfg.outputFile);
         Path parent = outputPath.getParent();
-        Path snapshotPath = parent != null ? parent.resolve("packetdump-recent.json") : Path.of("packetdump-recent.json");
+        String snapshotFileName = "packetdump-recent-" + generatedAtEpochMs + ".json";
+        Path snapshotPath = parent != null ? parent.resolve(snapshotFileName) : Path.of(snapshotFileName);
 
         Path snapshotParent = snapshotPath.getParent();
         if (snapshotParent != null) {
             Files.createDirectories(snapshotParent);
         }
 
-        Files.writeString(snapshotPath, PRETTY_GSON.toJson(snapshot), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        String exceptionType = throwable != null ? throwable.getClass().getName() : null;
+        String exceptionMessage = throwable != null ? this.truncateString(throwable.getMessage(), 512) : null;
+        RecentSnapshotFile snapshotFile = new RecentSnapshotFile(
+            generatedAtEpochMs,
+            generatedAtIso,
+            trigger,
+            exceptionType,
+            exceptionMessage,
+            snapshot.size(),
+            snapshot
+        );
+
+        Files.writeString(snapshotPath, PRETTY_GSON.toJson(snapshotFile), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
 
         return snapshotPath;
     }
@@ -281,7 +316,7 @@ public final class PacketDumpService {
 
     private void capture(Connection connection, Packet<?> packet, PacketDumpDirection direction, Boolean flush) {
         PacketDumpConfig cfg = this.config;
-        if (cfg.fullDisable || (!cfg.dumpAllByConfig && !this.commandDumpEnabled)) {
+        if (!cfg.dumpAllByConfig && !this.commandDumpEnabled) {
             return;
         }
 
@@ -295,7 +330,9 @@ public final class PacketDumpService {
         }
 
         this.addRecentEvent(event, cfg);
-        this.enqueueEvent(event, cfg);
+        if (cfg.autoDumpToFile) {
+            this.enqueueEvent(event, cfg);
+        }
     }
 
     private PacketDumpEvent buildEvent(Connection connection, Packet<?> packet, PacketDumpDirection direction, Boolean flush, PacketDumpConfig cfg) {
@@ -801,20 +838,15 @@ public final class PacketDumpService {
     }
 
     private void applyPostConfigUpdate(PacketDumpConfig cfg) {
-        if (!cfg.fullDisable) {
+        if (cfg.autoDumpToFile) {
             return;
         }
 
-        this.commandDumpEnabled = false;
-        this.clearInMemoryState();
+        this.clearWriterQueue();
     }
 
-    private void clearInMemoryState() {
-        synchronized (this.recentLock) {
-            this.recentEvents.clear();
-        }
+    private void clearWriterQueue() {
         this.writerQueue.clear();
-        PacketCreationTracker.clear();
     }
 
     private static String normalizeToken(String token) {
@@ -823,6 +855,17 @@ public final class PacketDumpService {
         }
         String normalized = token.trim().toLowerCase(Locale.ROOT);
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private record RecentSnapshotFile(
+        long dumpEpochMs,
+        String dumpTimestampIso,
+        String trigger,
+        String exceptionType,
+        String exceptionMessage,
+        int eventCount,
+        List<PacketDumpEvent> events
+    ) {
     }
 
     private static final class AtomicBooleanHolder {

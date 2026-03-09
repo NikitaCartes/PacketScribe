@@ -10,7 +10,8 @@ import java.util.Set;
 
 public final class PacketDumpConfig {
     public boolean dumpAllByConfig = false;
-    public boolean fullDisable = false;
+    public boolean autoDumpToFile = false;
+    public boolean dumpRecentOnException = false;
     public List<String> directions = new ArrayList<>(List.of(PacketDumpDirection.INBOUND.id(), PacketDumpDirection.OUTBOUND.id()));
     public List<String> packetFilters = new ArrayList<>();
     public List<String> playerFilters = new ArrayList<>();
@@ -28,7 +29,8 @@ public final class PacketDumpConfig {
     public PacketDumpConfig copy() {
         PacketDumpConfig copy = new PacketDumpConfig();
         copy.dumpAllByConfig = this.dumpAllByConfig;
-        copy.fullDisable = this.fullDisable;
+        copy.autoDumpToFile = this.autoDumpToFile;
+        copy.dumpRecentOnException = this.dumpRecentOnException;
         copy.directions = new ArrayList<>(this.directions);
         copy.packetFilters = new ArrayList<>(this.packetFilters);
         copy.playerFilters = new ArrayList<>(this.playerFilters);

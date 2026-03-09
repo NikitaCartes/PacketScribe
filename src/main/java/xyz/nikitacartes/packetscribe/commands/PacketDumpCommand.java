@@ -21,6 +21,9 @@ public final class PacketDumpCommand {
     private static final SimpleCommandExceptionType INVALID_DIRECTION = new SimpleCommandExceptionType(
         Component.literal("Direction must be inbound, outbound, or both")
     );
+    private static final SimpleCommandExceptionType INVALID_DUMP_MODE = new SimpleCommandExceptionType(
+        Component.literal("Mode must be memory or auto")
+    );
 
     private PacketDumpCommand() {
     }
@@ -36,9 +39,16 @@ public final class PacketDumpCommand {
                 .then(Commands.literal("off").executes(context -> setCommandEnabled(context, service, false)))
                 .then(Commands.literal("toggle").executes(context -> toggleCommand(context, service)))
                 .then(
-                    Commands.literal("fulldisable")
-                        .then(Commands.literal("on").executes(context -> setFullDisable(context, service, true)))
-                        .then(Commands.literal("off").executes(context -> setFullDisable(context, service, false)))
+                    Commands.literal("mode")
+                        .then(
+                            Commands.argument("value", StringArgumentType.word())
+                                .executes(context -> setDumpMode(context, service, StringArgumentType.getString(context, "value")))
+                        )
+                )
+                .then(
+                    Commands.literal("exceptiondump")
+                        .then(Commands.literal("on").executes(context -> setExceptionDump(context, service, true)))
+                        .then(Commands.literal("off").executes(context -> setExceptionDump(context, service, false)))
                 )
                 .then(Commands.literal("status").executes(context -> sendStatus(context, service)))
                 .then(Commands.literal("reload").executes(context -> reloadConfig(context, service)))
@@ -103,20 +113,12 @@ public final class PacketDumpCommand {
 
     private static int setCommandEnabled(CommandContext<CommandSourceStack> context, PacketDumpService service, boolean enabled) {
         service.setCommandDumpEnabled(enabled);
-        if (enabled && service.isFullyDisabled()) {
-            send(context, "Command dump ignored because fullDisable=true");
-            return Command.SINGLE_SUCCESS;
-        }
         send(context, "Command dump set to " + enabled);
         return Command.SINGLE_SUCCESS;
     }
 
     private static int toggleCommand(CommandContext<CommandSourceStack> context, PacketDumpService service) {
         boolean enabled = service.toggleCommandDumpEnabled();
-        if (!enabled && service.isFullyDisabled()) {
-            send(context, "Command dump cannot be enabled while fullDisable=true");
-            return Command.SINGLE_SUCCESS;
-        }
         send(context, "Command dump toggled to " + enabled);
         return Command.SINGLE_SUCCESS;
     }
@@ -127,12 +129,12 @@ public final class PacketDumpCommand {
             context,
             "active="
                 + service.isEffectivelyEnabled()
-                + " (fullDisable="
-                + cfg.fullDisable
-                + ", config="
+                + " (config="
                 + cfg.dumpAllByConfig
                 + ", command="
                 + service.isCommandDumpEnabled()
+                + ", mode="
+                + (cfg.autoDumpToFile ? "auto" : "memory")
                 + ")"
         );
         send(
@@ -150,6 +152,8 @@ public final class PacketDumpCommand {
                 + cfg.retentionMinutes
                 + ", stackTraces="
                 + cfg.stackTraces
+                + ", dumpRecentOnException="
+                + cfg.dumpRecentOnException
                 + ", includePacketContent="
                 + cfg.includePacketContent
                 + ", packetContentMaxLength="
@@ -242,14 +246,27 @@ public final class PacketDumpCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int setFullDisable(CommandContext<CommandSourceStack> context, PacketDumpService service, boolean enabled) {
-        service.setFullDisable(enabled);
-        if (enabled) {
-            send(context, "Full disable set to true; packet memory buffers were cleared");
-        } else {
-            send(context, "Full disable set to false");
-        }
+    private static int setDumpMode(CommandContext<CommandSourceStack> context, PacketDumpService service, String mode)
+        throws CommandSyntaxException {
+        boolean autoDumpToFile = parseDumpMode(mode);
+        service.setAutoDumpToFile(autoDumpToFile);
+        send(context, "Dump mode set to " + (autoDumpToFile ? "auto" : "memory"));
         return Command.SINGLE_SUCCESS;
+    }
+
+    private static int setExceptionDump(CommandContext<CommandSourceStack> context, PacketDumpService service, boolean enabled) {
+        service.setDumpRecentOnException(enabled);
+        send(context, "Exception-triggered recent dump set to " + enabled);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static boolean parseDumpMode(String mode) throws CommandSyntaxException {
+        String normalized = mode == null ? "" : mode.trim().toLowerCase();
+        return switch (normalized) {
+            case "memory", "manual", "buffer" -> false;
+            case "auto", "file", "autofile" -> true;
+            default -> throw INVALID_DUMP_MODE.create();
+        };
     }
 
     private static int setStackTrace(CommandContext<CommandSourceStack> context, PacketDumpService service, boolean enabled) {
