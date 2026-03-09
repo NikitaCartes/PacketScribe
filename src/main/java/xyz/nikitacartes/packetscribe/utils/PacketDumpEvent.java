@@ -1,4 +1,4 @@
-package xyz.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.utils;
 
 import com.google.gson.JsonElement;
 import java.util.List;

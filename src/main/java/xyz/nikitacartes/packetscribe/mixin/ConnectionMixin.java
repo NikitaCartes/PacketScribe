@@ -1,7 +1,7 @@
 package xyz.nikitacartes.packetscribe.mixin;
 
-import xyz.nikitacartes.packetscribe.packetdump.PacketCreationTracker;
-import xyz.nikitacartes.packetscribe.packetdump.PacketDumpService;
+import xyz.nikitacartes.packetscribe.utils.PacketCreationTracker;
+import xyz.nikitacartes.packetscribe.PacketDumpService;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import java.util.ArrayList;

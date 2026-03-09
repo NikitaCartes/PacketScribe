@@ -1,4 +1,4 @@
-package xyz.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -40,6 +40,12 @@ import net.minecraft.server.network.ServerCommonPacketListenerImpl;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.nikitacartes.packetscribe.config.PacketDumpConfig;
+import xyz.nikitacartes.packetscribe.config.PacketDumpConfigManager;
+import xyz.nikitacartes.packetscribe.utils.PacketCreationTracker;
+import xyz.nikitacartes.packetscribe.utils.PacketDumpDirection;
+import xyz.nikitacartes.packetscribe.utils.PacketDumpEvent;
+import xyz.nikitacartes.packetscribe.utils.PacketPlayerRef;
 
 public final class PacketDumpService {
     private static final Logger LOGGER = LoggerFactory.getLogger("packetdump-service");

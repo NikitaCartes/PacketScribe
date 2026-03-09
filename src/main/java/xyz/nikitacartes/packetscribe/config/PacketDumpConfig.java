@@ -1,4 +1,6 @@
-package xyz.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.config;
+
+import xyz.nikitacartes.packetscribe.utils.PacketDumpDirection;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;

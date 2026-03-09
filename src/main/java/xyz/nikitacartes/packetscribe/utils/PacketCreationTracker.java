@@ -1,4 +1,4 @@
-package xyz.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.utils;
 
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;

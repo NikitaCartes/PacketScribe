@@ -1,4 +1,4 @@
-package xyz.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.commands;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
@@ -13,6 +13,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.permissions.Permissions;
+import xyz.nikitacartes.packetscribe.config.PacketDumpConfig;
+import xyz.nikitacartes.packetscribe.utils.PacketDumpDirection;
+import xyz.nikitacartes.packetscribe.PacketDumpService;
 
 public final class PacketDumpCommand {
     private static final SimpleCommandExceptionType INVALID_DIRECTION = new SimpleCommandExceptionType(

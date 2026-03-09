@@ -1,4 +1,4 @@
-package xyz.nikitacartes.packetscribe.packetdump;
+package xyz.nikitacartes.packetscribe.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
