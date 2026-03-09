@@ -11,21 +11,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class PacketScribeMod implements ModInitializer {
-	public static final String MOD_ID = "packetscribe";
+    public static final String MOD_ID = "packetscribe";
 
-	// This logger is used to write text to the console and the log file.
-	// It is considered best practice to use your mod id as the logger's name.
-	// That way, it's clear which mod wrote info, warnings, and errors.
-	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    // This logger is used to write text to the console and the log file.
+    // It is considered best practice to use your mod id as the logger's name.
+    // That way, it's clear which mod wrote info, warnings, and errors.
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	@Override
-	public void onInitialize() {
-		PacketDumpService service = PacketDumpService.getInstance();
-		service.start();
+    @Override
+    public void onInitialize() {
+        PacketDumpService service = PacketDumpService.getInstance();
+        service.start();
 
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> PacketDumpCommand.register(dispatcher));
-		ServerLifecycleEvents.SERVER_STOPPING.register(server -> service.shutdown());
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> PacketDumpCommand.register(dispatcher));
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> service.shutdown());
 
-		LOGGER.info("PacketScribe initialized");
-	}
+        LOGGER.info("PacketScribe initialized");
+    }
 }
