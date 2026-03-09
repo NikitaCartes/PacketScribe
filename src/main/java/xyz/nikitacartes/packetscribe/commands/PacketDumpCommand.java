@@ -12,7 +12,6 @@ import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.permissions.Permissions;
 import xyz.nikitacartes.packetscribe.config.PacketDumpConfig;
 import xyz.nikitacartes.packetscribe.utils.PacketDumpDirection;
 import xyz.nikitacartes.packetscribe.PacketDumpService;
@@ -33,7 +32,7 @@ public final class PacketDumpCommand {
 
         dispatcher.register(
             Commands.literal("packetdump")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(3))
                 .executes(context -> sendStatus(context, service))
                 .then(Commands.literal("on").executes(context -> setCommandEnabled(context, service, true)))
                 .then(Commands.literal("off").executes(context -> setCommandEnabled(context, service, false)))
