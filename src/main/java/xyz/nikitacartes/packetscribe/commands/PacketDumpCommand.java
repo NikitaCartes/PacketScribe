@@ -30,7 +30,7 @@ public final class PacketDumpCommand {
 
         dispatcher.register(
             Commands.literal("packetdump")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .executes(context -> sendStatus(context, service))
                 .then(Commands.literal("on").executes(context -> setCommandEnabled(context, service, true)))
                 .then(Commands.literal("off").executes(context -> setCommandEnabled(context, service, false)))
