@@ -1,29 +1,31 @@
 # PacketScribe (Fabric)
 
-Мод перехватывает и дампит входящие/исходящие Minecraft-пакеты в JSON.
+This mod intercepts and dumps incoming/outgoing Minecraft packets to JSON.
 
-Автор: `NikitaCartes`
+Author: `NikitaCartes`
 
-## Возможности
+## Features
 
-- Дамп всех пакетов по конфигу (`dumpAllByConfig`)
-- Дамп по команде (`/packetdump on|off|toggle`)
-- Фильтрация по конкретным пакетам
-- Фильтрация по конкретному игроку (имя или UUID)
-- Фильтрация по направлению (`inbound`/`outbound`)
-- Хранение последних `n` минут в памяти
-- Опциональные stack trace для каждого события
-- Сохранение событий в файл `jsonl`
+- Dump all packets via config (`dumpAllByConfig`)
+- Dump via command (`/packetdump on|off|toggle`)
+- Fully disable tracking (`fullDisable`) so packets do not accumulate in memory
+- Filter by specific packets
+- Filter by specific player (name or UUID)
+- Filter by direction (`inbound`/`outbound`)
+- Keep the last `n` minutes in memory
+- Optional stack traces for each event
+- Save events to a `jsonl` file
 
-## Где лежит конфиг
+## Config location
 
-Файл создаётся автоматически при первом запуске:
+The file is created automatically on first launch:
 
 - `<gameDir>/config/packetdump.json`
 
-Основные поля:
+Main fields:
 
 - `dumpAllByConfig`
+- `fullDisable`
 - `directions`
 - `packetFilters`
 - `playerFilters`
@@ -34,21 +36,18 @@
 - `packetContentMaxLength`
 - `outputFile`
 
-## Команда
+## Command
 
-Базовая команда: `/packetdump`
+Base command: `/packetdump`
 
-Подкоманды:
+Subcommands:
 
 - `on|off|toggle|status`
+- `fulldisable on|off`
 - `reload`
-- `recent` — записать snapshot последних `n` минут в `packetdump-recent.json`
+- `recent` — write a snapshot of the last `n` minutes to `packetdump-recent.json`
 - `direction <inbound|outbound|both>`
 - `packet add/remove/clear <filter>`
 - `player add/remove/clear <name-or-uuid>`
 - `retention <minutes>`
 - `stacktrace <on|off>`
-
-## License
-
-Licensed under CC0-1.0.

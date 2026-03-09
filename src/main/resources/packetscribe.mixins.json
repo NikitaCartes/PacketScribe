@@ -1,14 +1,14 @@
 {
-	"required": true,
-	"package": "dev.nikitacartes.packetscribe.mixin",
-	"compatibilityLevel": "JAVA_21",
-	"mixins": [
-      "xyz.nikitacartes.packetscribe.mixin.network.ConnectionMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	},
-	"overwrites": {
-		"requireAnnotations": true
+  "required": true,
+  "package": "xyz.nikitacartes.packetscribe.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ConnectionMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
 	}
 }

@@ -9,9 +9,9 @@
 	],
 	"contact": {
 		"homepage": "https://github.com/NikitaCartes",
-		"sources": "https://github.com/NikitaCartes/PacketLogger"
+		"sources": "https://github.com/NikitaCartes/PacketScribe"
 	},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"environment": "*",
 	"entrypoints": {
 		"main": [

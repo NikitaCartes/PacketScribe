@@ -17,8 +17,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class ConnectionMixin {
 	@Inject(method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"))
 	private void packetdump$onInbound(ChannelHandlerContext context, Packet<?> packet, CallbackInfo ci) {
+		PacketDumpService service = PacketDumpService.getInstance();
+		if (service.isFullyDisabled()) {
+			return;
+		}
+
 		PacketCreationTracker.markIfAbsent(packet, null);
-		PacketDumpService.getInstance().onInbound((Connection)(Object)this, packet);
+		service.onInbound((Connection)(Object)this, packet);
 	}
 
 	@Inject(
@@ -27,13 +32,23 @@ public class ConnectionMixin {
 		require = 0
 	)
 	private void packetdump$onOutboundSend(Packet<?> packet, ChannelFutureListener listener, boolean flush, CallbackInfo ci) {
+		PacketDumpService service = PacketDumpService.getInstance();
+		if (service.isFullyDisabled()) {
+			return;
+		}
+
 		PacketCreationTracker.markIfAbsent(packet, packetdump$captureCurrentStackTrace());
 	}
 
 	@Inject(method = "doSendPacket(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;Z)V", at = @At("HEAD"))
 	private void packetdump$onOutbound(Packet<?> packet, ChannelFutureListener listener, boolean flush, CallbackInfo ci) {
+		PacketDumpService service = PacketDumpService.getInstance();
+		if (service.isFullyDisabled()) {
+			return;
+		}
+
 		PacketCreationTracker.markIfAbsent(packet, null);
-		PacketDumpService.getInstance().onOutbound((Connection)(Object)this, packet, flush);
+		service.onOutbound((Connection)(Object)this, packet, flush);
 	}
 
 	private static List<String> packetdump$captureCurrentStackTrace() {

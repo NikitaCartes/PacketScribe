@@ -108,9 +108,12 @@ public final class PacketDumpService {
 	}
 
 	public void reloadConfig() {
+		PacketDumpConfig reloaded;
 		synchronized (this.configLock) {
-			this.config = this.configManager.loadOrCreate();
+			reloaded = this.configManager.loadOrCreate();
+			this.config = reloaded;
 		}
+		this.applyPostConfigUpdate(reloaded);
 	}
 
 	public void onInbound(Connection connection, Packet<?> packet) {
@@ -123,7 +126,11 @@ public final class PacketDumpService {
 
 	public boolean isEffectivelyEnabled() {
 		PacketDumpConfig cfg = this.config;
-		return cfg.dumpAllByConfig || this.commandDumpEnabled;
+		return !cfg.fullDisable && (cfg.dumpAllByConfig || this.commandDumpEnabled);
+	}
+
+	public boolean isFullyDisabled() {
+		return this.config.fullDisable;
 	}
 
 	public boolean isCommandDumpEnabled() {
@@ -131,10 +138,19 @@ public final class PacketDumpService {
 	}
 
 	public void setCommandDumpEnabled(boolean enabled) {
+		if (enabled && this.config.fullDisable) {
+			this.commandDumpEnabled = false;
+			return;
+		}
 		this.commandDumpEnabled = enabled;
 	}
 
 	public boolean toggleCommandDumpEnabled() {
+		if (this.config.fullDisable) {
+			this.commandDumpEnabled = false;
+			return false;
+		}
+
 		this.commandDumpEnabled = !this.commandDumpEnabled;
 		return this.commandDumpEnabled;
 	}
@@ -207,6 +223,10 @@ public final class PacketDumpService {
 		this.updateConfig(cfg -> cfg.retentionMinutes = retentionMinutes);
 	}
 
+	public void setFullDisable(boolean enabled) {
+		this.updateConfig(cfg -> cfg.fullDisable = enabled);
+	}
+
 	public void setStackTracesEnabled(boolean enabled) {
 		this.updateConfig(cfg -> cfg.stackTraces = enabled);
 	}
@@ -262,7 +282,7 @@ public final class PacketDumpService {
 
 	private void capture(Connection connection, Packet<?> packet, PacketDumpDirection direction, Boolean flush) {
 		PacketDumpConfig cfg = this.config;
-		if (!cfg.dumpAllByConfig && !this.commandDumpEnabled) {
+		if (cfg.fullDisable || (!cfg.dumpAllByConfig && !this.commandDumpEnabled)) {
 			return;
 		}
 
@@ -802,13 +822,32 @@ public final class PacketDumpService {
 	}
 
 	private void updateConfig(Consumer<PacketDumpConfig> updater) {
+		PacketDumpConfig updated;
 		synchronized (this.configLock) {
-			PacketDumpConfig updated = this.config.copy();
+			updated = this.config.copy();
 			updater.accept(updated);
 			updated.normalize();
 			this.config = updated;
 			this.configManager.save(updated);
 		}
+		this.applyPostConfigUpdate(updated);
+	}
+
+	private void applyPostConfigUpdate(PacketDumpConfig cfg) {
+		if (!cfg.fullDisable) {
+			return;
+		}
+
+		this.commandDumpEnabled = false;
+		this.clearInMemoryState();
+	}
+
+	private void clearInMemoryState() {
+		synchronized (this.recentLock) {
+			this.recentEvents.clear();
+		}
+		this.writerQueue.clear();
+		PacketCreationTracker.clear();
 	}
 
 	private static String normalizeToken(String token) {

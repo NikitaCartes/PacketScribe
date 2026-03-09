@@ -32,6 +32,11 @@ public final class PacketDumpCommand {
 				.then(Commands.literal("on").executes(context -> setCommandEnabled(context, service, true)))
 				.then(Commands.literal("off").executes(context -> setCommandEnabled(context, service, false)))
 				.then(Commands.literal("toggle").executes(context -> toggleCommand(context, service)))
+				.then(
+					Commands.literal("fulldisable")
+						.then(Commands.literal("on").executes(context -> setFullDisable(context, service, true)))
+						.then(Commands.literal("off").executes(context -> setFullDisable(context, service, false)))
+				)
 				.then(Commands.literal("status").executes(context -> sendStatus(context, service)))
 				.then(Commands.literal("reload").executes(context -> reloadConfig(context, service)))
 				.then(Commands.literal("recent").executes(context -> writeRecentSnapshot(context, service)))
@@ -95,12 +100,20 @@ public final class PacketDumpCommand {
 
 	private static int setCommandEnabled(CommandContext<CommandSourceStack> context, PacketDumpService service, boolean enabled) {
 		service.setCommandDumpEnabled(enabled);
+		if (enabled && service.isFullyDisabled()) {
+			send(context, "Command dump ignored because fullDisable=true");
+			return Command.SINGLE_SUCCESS;
+		}
 		send(context, "Command dump set to " + enabled);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int toggleCommand(CommandContext<CommandSourceStack> context, PacketDumpService service) {
 		boolean enabled = service.toggleCommandDumpEnabled();
+		if (!enabled && service.isFullyDisabled()) {
+			send(context, "Command dump cannot be enabled while fullDisable=true");
+			return Command.SINGLE_SUCCESS;
+		}
 		send(context, "Command dump toggled to " + enabled);
 		return Command.SINGLE_SUCCESS;
 	}
@@ -111,7 +124,9 @@ public final class PacketDumpCommand {
 			context,
 			"active="
 				+ service.isEffectivelyEnabled()
-				+ " (config="
+				+ " (fullDisable="
+				+ cfg.fullDisable
+				+ ", config="
 				+ cfg.dumpAllByConfig
 				+ ", command="
 				+ service.isCommandDumpEnabled()
@@ -221,6 +236,16 @@ public final class PacketDumpCommand {
 	private static int setRetention(CommandContext<CommandSourceStack> context, PacketDumpService service, int minutes) {
 		service.setRetentionMinutes(minutes);
 		send(context, "Retention set to " + minutes + " minute(s)");
+		return Command.SINGLE_SUCCESS;
+	}
+
+	private static int setFullDisable(CommandContext<CommandSourceStack> context, PacketDumpService service, boolean enabled) {
+		service.setFullDisable(enabled);
+		if (enabled) {
+			send(context, "Full disable set to true; packet memory buffers were cleared");
+		} else {
+			send(context, "Full disable set to false");
+		}
 		return Command.SINGLE_SUCCESS;
 	}
 

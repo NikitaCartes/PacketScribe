@@ -36,6 +36,13 @@ public final class PacketCreationTracker {
 		return CREATION_INFO.get(new IdentityWeakPacketRef(packet));
 	}
 
+	public static void clear() {
+		CREATION_INFO.clear();
+		while (STALE_ENTRIES.poll() != null) {
+			// drain queued stale references
+		}
+	}
+
 	private static List<String> captureCurrentThreadStackTrace() {
 		StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
 		List<String> result = new ArrayList<>(stackTrace.length);
