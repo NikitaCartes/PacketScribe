@@ -15,8 +15,12 @@ public final class PacketDumpConfig {
 	public int retentionMinutes = 10;
 	public boolean stackTraces = false;
 	public int stackTraceDepth = 20;
+	public boolean includePacketContent = false;
+	public int packetContentMaxLength = 1024;
 	public String outputFile = "logs/packetdump.jsonl";
 	public int writerQueueCapacity = 32768;
+	public int writerBatchSize = 128;
+	public int writerFlushIntervalMs = 250;
 	public boolean dropOldestWhenQueueFull = true;
 
 	public PacketDumpConfig copy() {
@@ -29,8 +33,12 @@ public final class PacketDumpConfig {
 		copy.retentionMinutes = this.retentionMinutes;
 		copy.stackTraces = this.stackTraces;
 		copy.stackTraceDepth = this.stackTraceDepth;
+		copy.includePacketContent = this.includePacketContent;
+		copy.packetContentMaxLength = this.packetContentMaxLength;
 		copy.outputFile = this.outputFile;
 		copy.writerQueueCapacity = this.writerQueueCapacity;
+		copy.writerBatchSize = this.writerBatchSize;
+		copy.writerFlushIntervalMs = this.writerFlushIntervalMs;
 		copy.dropOldestWhenQueueFull = this.dropOldestWhenQueueFull;
 		return copy;
 	}
@@ -55,6 +63,12 @@ public final class PacketDumpConfig {
 			this.stackTraceDepth = 128;
 		}
 
+		if (this.packetContentMaxLength < 64) {
+			this.packetContentMaxLength = 64;
+		} else if (this.packetContentMaxLength > 65536) {
+			this.packetContentMaxLength = 65536;
+		}
+
 		if (this.outputFile == null || this.outputFile.isBlank()) {
 			this.outputFile = "logs/packetdump.jsonl";
 		}
@@ -63,6 +77,18 @@ public final class PacketDumpConfig {
 			this.writerQueueCapacity = 256;
 		} else if (this.writerQueueCapacity > 262144) {
 			this.writerQueueCapacity = 262144;
+		}
+
+		if (this.writerBatchSize < 1) {
+			this.writerBatchSize = 1;
+		} else if (this.writerBatchSize > 8192) {
+			this.writerBatchSize = 8192;
+		}
+
+		if (this.writerFlushIntervalMs < 10) {
+			this.writerFlushIntervalMs = 10;
+		} else if (this.writerFlushIntervalMs > 5000) {
+			this.writerFlushIntervalMs = 5000;
 		}
 	}
 

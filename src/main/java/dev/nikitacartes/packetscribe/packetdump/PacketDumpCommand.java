@@ -132,6 +132,14 @@ public final class PacketDumpCommand {
 				+ cfg.retentionMinutes
 				+ ", stackTraces="
 				+ cfg.stackTraces
+				+ ", includePacketContent="
+				+ cfg.includePacketContent
+				+ ", packetContentMaxLength="
+				+ cfg.packetContentMaxLength
+				+ ", writerBatchSize="
+				+ cfg.writerBatchSize
+				+ ", writerFlushIntervalMs="
+				+ cfg.writerFlushIntervalMs
 				+ ", recent="
 				+ service.getRecentCount()
 				+ ", dropped="

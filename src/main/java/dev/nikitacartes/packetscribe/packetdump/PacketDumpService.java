@@ -2,9 +2,17 @@ package dev.nikitacartes.packetscribe.packetdump;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import com.mojang.authlib.GameProfile;
 import java.io.IOException;
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,8 +21,10 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
@@ -35,6 +45,10 @@ public final class PacketDumpService {
 	private static final Logger LOGGER = LoggerFactory.getLogger("packetdump-service");
 	private static final Gson EVENT_GSON = new GsonBuilder().serializeNulls().disableHtmlEscaping().create();
 	private static final Gson PRETTY_GSON = new GsonBuilder().serializeNulls().setPrettyPrinting().disableHtmlEscaping().create();
+	private static final int PACKET_JSON_MAX_DEPTH = 5;
+	private static final int PACKET_JSON_MAX_COLLECTION_ITEMS = 128;
+	private static final int PACKET_JSON_MAX_FIELD_COUNT = 256;
+	private static final int PACKET_JSON_MAX_STRING_LENGTH = 16*1024;
 	private static final PacketDumpService INSTANCE = new PacketDumpService();
 
 	private final PacketDumpConfigManager configManager;
@@ -298,6 +312,7 @@ public final class PacketDumpService {
 		PacketPlayerRef playerRef = this.resolvePlayer(listener);
 		String remoteAddress = connection.getRemoteAddress() == null ? null : connection.getRemoteAddress().toString();
 		String connectionId = Integer.toHexString(System.identityHashCode(connection));
+		JsonElement packetContent = this.resolvePacketContent(packet, cfg);
 		List<String> stackTrace = cfg.stackTraces ? this.captureStackTrace(cfg.stackTraceDepth) : null;
 
 		return new PacketDumpEvent(
@@ -315,8 +330,228 @@ public final class PacketDumpService {
 			connection.isMemoryConnection(),
 			Thread.currentThread().getName(),
 			flush,
+			packetContent,
 			stackTrace
 		);
+	}
+
+	private JsonElement resolvePacketContent(Packet<?> packet, PacketDumpConfig cfg) {
+		if (!cfg.includePacketContent) {
+			return null;
+		}
+
+		try {
+			int maxStringLength = Math.min(cfg.packetContentMaxLength, PACKET_JSON_MAX_STRING_LENGTH);
+			JsonElement content = this.toJsonElement(packet, 0, new IdentityHashMap<>(), maxStringLength);
+			return this.truncateJsonElement(content, packet.getClass().getName(), cfg.packetContentMaxLength);
+		} catch (Throwable t) {
+			JsonObject fallback = new JsonObject();
+			fallback.addProperty("_type", packet.getClass().getName());
+			fallback.addProperty("_error", "packet-json-serialization-failed");
+			fallback.addProperty("_exception", t.getClass().getSimpleName());
+			if (t.getMessage() != null && !t.getMessage().isBlank()) {
+				fallback.addProperty("_message", this.truncateString(t.getMessage(), 256));
+			}
+			return fallback;
+		}
+	}
+
+	private JsonElement toJsonElement(Object value, int depth, IdentityHashMap<Object, Boolean> visited, int maxStringLength) {
+		if (value == null) {
+			return JsonNull.INSTANCE;
+		}
+
+		if (value instanceof JsonElement jsonElement) {
+			return jsonElement.deepCopy();
+		}
+
+		if (value instanceof Number number) {
+			return new JsonPrimitive(number);
+		}
+
+		if (value instanceof Boolean bool) {
+			return new JsonPrimitive(bool);
+		}
+
+		if (value instanceof Character character) {
+			return new JsonPrimitive(character);
+		}
+
+		if (value instanceof CharSequence text) {
+			return new JsonPrimitive(this.truncateString(text.toString(), maxStringLength));
+		}
+
+		if (value instanceof Enum<?> enumValue) {
+			return new JsonPrimitive(enumValue.name());
+		}
+
+		if (value instanceof Class<?> clazz) {
+			return new JsonPrimitive(clazz.getName());
+		}
+
+		Class<?> valueClass = value.getClass();
+		if (depth >= PACKET_JSON_MAX_DEPTH) {
+			JsonObject depthLimited = new JsonObject();
+			depthLimited.addProperty("_type", valueClass.getName());
+			depthLimited.addProperty("_depthLimited", true);
+			return depthLimited;
+		}
+
+		if (visited.containsKey(value)) {
+			JsonObject cycle = new JsonObject();
+			cycle.addProperty("_type", valueClass.getName());
+			cycle.addProperty("_cycleRef", true);
+			return cycle;
+		}
+
+		visited.put(value, Boolean.TRUE);
+		try {
+			if (valueClass.isArray()) {
+				return this.toJsonArray(value, depth, visited, maxStringLength);
+			}
+
+			if (value instanceof Iterable<?> iterable) {
+				return this.toJsonArray(iterable, depth, visited, maxStringLength);
+			}
+
+			if (value instanceof Map<?, ?> map) {
+				return this.toJsonObject(map, depth, visited, maxStringLength);
+			}
+
+			if (valueClass.getName().startsWith("java.")) {
+				return new JsonPrimitive(this.truncateString(String.valueOf(value), maxStringLength));
+			}
+
+			return this.reflectObjectToJson(value, valueClass, depth, visited, maxStringLength);
+		} finally {
+			visited.remove(value);
+		}
+	}
+
+	private JsonArray toJsonArray(Object arrayValue, int depth, IdentityHashMap<Object, Boolean> visited, int maxStringLength) {
+		int length = Array.getLength(arrayValue);
+		int limit = Math.min(length, PACKET_JSON_MAX_COLLECTION_ITEMS);
+		JsonArray jsonArray = new JsonArray();
+		for (int i = 0; i < limit; i++) {
+			jsonArray.add(this.toJsonElement(Array.get(arrayValue, i), depth + 1, visited, maxStringLength));
+		}
+
+		if (length > limit) {
+			JsonObject marker = new JsonObject();
+			marker.addProperty("_truncatedItems", length - limit);
+			jsonArray.add(marker);
+		}
+
+		return jsonArray;
+	}
+
+	private JsonArray toJsonArray(Iterable<?> iterable, int depth, IdentityHashMap<Object, Boolean> visited, int maxStringLength) {
+		JsonArray jsonArray = new JsonArray();
+		int count = 0;
+		for (Object item : iterable) {
+			if (count >= PACKET_JSON_MAX_COLLECTION_ITEMS) {
+				JsonObject marker = new JsonObject();
+				marker.addProperty("_truncatedItems", true);
+				jsonArray.add(marker);
+				break;
+			}
+
+			jsonArray.add(this.toJsonElement(item, depth + 1, visited, maxStringLength));
+			count++;
+		}
+
+		return jsonArray;
+	}
+
+	private JsonObject toJsonObject(Map<?, ?> map, int depth, IdentityHashMap<Object, Boolean> visited, int maxStringLength) {
+		JsonObject jsonObject = new JsonObject();
+		int count = 0;
+		for (Map.Entry<?, ?> entry : map.entrySet()) {
+			if (count >= PACKET_JSON_MAX_COLLECTION_ITEMS) {
+				jsonObject.addProperty("_truncatedEntries", map.size() - count);
+				break;
+			}
+
+			String key = this.truncateString(String.valueOf(entry.getKey()), 128);
+			jsonObject.add(key, this.toJsonElement(entry.getValue(), depth + 1, visited, maxStringLength));
+			count++;
+		}
+
+		return jsonObject;
+	}
+
+	private JsonObject reflectObjectToJson(
+		Object value,
+		Class<?> valueClass,
+		int depth,
+		IdentityHashMap<Object, Boolean> visited,
+		int maxStringLength
+	) {
+		JsonObject objectJson = new JsonObject();
+		objectJson.addProperty("_type", valueClass.getName());
+
+		List<Field> fields = this.collectSerializableFields(valueClass);
+		int addedFields = 0;
+		for (Field field : fields) {
+			if (addedFields >= PACKET_JSON_MAX_FIELD_COUNT) {
+				objectJson.addProperty("_truncatedFields", fields.size() - addedFields);
+				break;
+			}
+
+			try {
+				field.setAccessible(true);
+				Object fieldValue = field.get(value);
+				objectJson.add(field.getName(), this.toJsonElement(fieldValue, depth + 1, visited, maxStringLength));
+			} catch (Throwable t) {
+				objectJson.addProperty(field.getName(), "<inaccessible:" + t.getClass().getSimpleName() + ">");
+			}
+			addedFields++;
+		}
+
+		if (addedFields == 0) {
+			objectJson.addProperty("_value", this.truncateString(String.valueOf(value), maxStringLength));
+		}
+
+		return objectJson;
+	}
+
+	private List<Field> collectSerializableFields(Class<?> valueClass) {
+		List<Field> fields = new ArrayList<>();
+		Class<?> current = valueClass;
+		while (current != null && current != Object.class) {
+			for (Field field : current.getDeclaredFields()) {
+				if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+					continue;
+				}
+				fields.add(field);
+			}
+			current = current.getSuperclass();
+		}
+		return fields;
+	}
+
+	private JsonElement truncateJsonElement(JsonElement content, String packetClass, int maxLength) {
+		String encoded = EVENT_GSON.toJson(content);
+		if (encoded.length() <= maxLength) {
+			return content;
+		}
+
+		JsonObject truncated = new JsonObject();
+		truncated.addProperty("_type", packetClass);
+		truncated.addProperty("_truncated", true);
+		truncated.addProperty("_maxLength", maxLength);
+		truncated.addProperty("_actualLength", encoded.length());
+		truncated.addProperty("_preview", encoded.substring(0, maxLength));
+		return truncated;
+	}
+
+	private String truncateString(String value, int maxLength) {
+		if (value == null || value.length() <= maxLength) {
+			return value;
+		}
+
+		int truncatedChars = value.length() - maxLength;
+		return value.substring(0, maxLength) + "... [truncated +" + truncatedChars + " chars]";
 	}
 
 	private PacketPlayerRef resolvePlayer(PacketListener listener) {
@@ -474,11 +709,36 @@ public final class PacketDumpService {
 	}
 
 	private void writerLoop() {
+		List<PacketDumpEvent> batch = new ArrayList<>();
+		long batchStartedAtMs = 0L;
+
 		while (this.running.get() || !this.writerQueue.isEmpty()) {
 			try {
-				PacketDumpEvent event = this.writerQueue.pollFirst(500, TimeUnit.MILLISECONDS);
+				PacketDumpConfig cfg = this.config;
+				int batchSize = cfg.writerBatchSize;
+				int flushIntervalMs = cfg.writerFlushIntervalMs;
+
+				PacketDumpEvent event = this.writerQueue.pollFirst(flushIntervalMs, TimeUnit.MILLISECONDS);
+				long nowMs = System.currentTimeMillis();
 				if (event != null) {
-					this.appendEventToFile(event);
+					if (batch.isEmpty()) {
+						batchStartedAtMs = nowMs;
+					}
+					batch.add(event);
+					if (batch.size() < batchSize) {
+						this.writerQueue.drainTo(batch, batchSize - batch.size());
+					}
+				}
+
+				if (!batch.isEmpty()) {
+					boolean flushBySize = batch.size() >= batchSize;
+					boolean flushByInterval = nowMs - batchStartedAtMs >= flushIntervalMs;
+					boolean flushOnShutdown = !this.running.get() && this.writerQueue.isEmpty();
+					if (flushBySize || flushByInterval || flushOnShutdown) {
+						this.appendEventsToFile(batch);
+						batch.clear();
+						batchStartedAtMs = 0L;
+					}
 				}
 			} catch (InterruptedException e) {
 				if (!this.running.get()) {
@@ -486,7 +746,17 @@ public final class PacketDumpService {
 					break;
 				}
 			} catch (Exception e) {
-				LOGGER.error("Failed to write packet event", e);
+				LOGGER.error("Failed to write packet event batch", e);
+				batch.clear();
+				batchStartedAtMs = 0L;
+			}
+		}
+
+		if (!batch.isEmpty()) {
+			try {
+				this.appendEventsToFile(batch);
+			} catch (Exception e) {
+				LOGGER.error("Failed to flush packet event batch", e);
 			}
 		}
 
@@ -494,26 +764,50 @@ public final class PacketDumpService {
 	}
 
 	private void drainQueueSynchronously() {
+		List<PacketDumpEvent> batch = new ArrayList<>();
+		int batchSize = this.config.writerBatchSize;
 		PacketDumpEvent event;
 		while ((event = this.writerQueue.pollFirst()) != null) {
-			try {
-				this.appendEventToFile(event);
-			} catch (Exception e) {
-				LOGGER.error("Failed to flush packet event", e);
+			batch.add(event);
+			if (batch.size() >= batchSize) {
+				this.flushBatchSynchronously(batch);
 			}
+		}
+
+		if (!batch.isEmpty()) {
+			this.flushBatchSynchronously(batch);
 		}
 	}
 
-	private void appendEventToFile(PacketDumpEvent event) throws IOException {
+	private void flushBatchSynchronously(List<PacketDumpEvent> batch) {
+		try {
+			this.appendEventsToFile(batch);
+		} catch (Exception e) {
+			LOGGER.error("Failed to flush packet event batch", e);
+		} finally {
+			batch.clear();
+		}
+	}
+
+	private void appendEventsToFile(List<PacketDumpEvent> events) throws IOException {
+		if (events.isEmpty()) {
+			return;
+		}
+
 		Path outputPath = resolveOutputPath(this.config.outputFile);
 		Path parent = outputPath.getParent();
 		if (parent != null) {
 			Files.createDirectories(parent);
 		}
 
+		StringBuilder payload = new StringBuilder(events.size() * 256);
+		for (PacketDumpEvent event : events) {
+			payload.append(EVENT_GSON.toJson(event)).append(System.lineSeparator());
+		}
+
 		Files.writeString(
 			outputPath,
-			EVENT_GSON.toJson(event) + System.lineSeparator(),
+			payload,
 			StandardCharsets.UTF_8,
 			StandardOpenOption.CREATE,
 			StandardOpenOption.WRITE,

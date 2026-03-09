@@ -30,6 +30,8 @@
 - `retentionMinutes`
 - `stackTraces`
 - `stackTraceDepth`
+- `includePacketContent`
+- `packetContentMaxLength`
 - `outputFile`
 
 ## Команда

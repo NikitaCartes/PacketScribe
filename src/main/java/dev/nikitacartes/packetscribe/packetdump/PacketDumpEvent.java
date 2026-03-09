@@ -1,5 +1,6 @@
 package dev.nikitacartes.packetscribe.packetdump;
 
+import com.google.gson.JsonElement;
 import java.util.List;
 
 public record PacketDumpEvent(
@@ -17,6 +18,7 @@ public record PacketDumpEvent(
 	boolean localConnection,
 	String threadName,
 	Boolean flush,
+	JsonElement packetContent,
 	List<String> stackTrace
 ) {
 }
