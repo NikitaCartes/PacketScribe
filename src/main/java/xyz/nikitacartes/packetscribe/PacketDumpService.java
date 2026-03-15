@@ -360,7 +360,8 @@ public final class PacketDumpService {
         }
 
         PacketPlayerRef playerRef = this.resolvePlayer(listener);
-        String remoteAddress = connection.getRemoteAddress().toString();
+        // Yes it can be
+        String remoteAddress = connection.getRemoteAddress() != null ? connection.getRemoteAddress().toString() : null;
         String connectionId = Integer.toHexString(System.identityHashCode(connection));
         JsonElement packetContent = this.resolvePacketContent(packet, cfg);
         PacketCreationTracker.PacketCreationInfo creationInfo = PacketCreationTracker.get(packet);
